@@ -1,0 +1,15 @@
+# Binaries
+flathex
+*.exe
+
+# Go toolchain
+/vendor/
+
+# Environment files (never commit secrets)
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+*.iml

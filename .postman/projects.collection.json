@@ -1,0 +1,248 @@
+{
+  "info": {
+    "_postman_id": "flathex-projects-collection",
+    "name": "TaskHex — Projects",
+    "description": "All operations for the `projects` aggregate.\n\n**Domain rules exercised here:**\n- Create / rename / delete projects\n- Add duplicate task IDs is idempotent (the entity deduplicates)\n- `GET /projects/{id}/tasks` — canonical Rule 5 example: the handler calls\n  both services independently; no aggregate imports the other.\n\n**Cross-domain flow to demo:**\n1. Run 'Create Project' → `{{project_id}}` is captured\n2. Switch to Tasks collection → run 'Create Task' with `{{project_id}}` in body\n3. Come back and run 'Get Project with Tasks' to see the composed response.\n\n**Setup:** Import `environment.local.json` and start the server with `go run .`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [],
+  "item": [
+    {
+      "name": "CRUD",
+      "description": "Basic create / read / list / rename / delete.",
+      "item": [
+        {
+          "name": "Create Project",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 201 Created\", () => pm.response.to.have.status(201));",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Has id\", () => pm.expect(body.id).to.be.a('string').and.not.empty);",
+                  "pm.test(\"Task count starts at 0\", () => pm.expect(body.task_count).to.eql(0));",
+                  "",
+                  "pm.environment.set('project_id', body.id);",
+                  "console.log('✅ project_id captured:', body.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"FlatHex Architecture Demo\",\n  \"description\": \"Showcase project for the FlatHex presentation.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/projects",
+              "host": ["{{base_url}}"],
+              "path": ["projects"]
+            }
+          }
+        },
+        {
+          "name": "Create Project — ❌ Empty name (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 422 Unprocessable\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"Error mentions name\", () => {",
+                  "  pm.expect(pm.response.text()).to.include('name');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"This should fail.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/projects",
+              "host": ["{{base_url}}"],
+              "path": ["projects"]
+            }
+          }
+        },
+        {
+          "name": "List All Projects",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Response is an array\", () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/projects",
+              "host": ["{{base_url}}"],
+              "path": ["projects"]
+            }
+          }
+        },
+        {
+          "name": "Get Project by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"ID matches\", () => pm.expect(body.id).to.eql(pm.environment.get('project_id')));",
+                  "pm.test(\"Has task_count\", () => pm.expect(body).to.have.property('task_count'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/projects/{{project_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["projects", "{{project_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Get Project — ❌ Not found (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 404 Not Found\", () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/projects/does-not-exist",
+              "host": ["{{base_url}}"],
+              "path": ["projects", "does-not-exist"]
+            }
+          }
+        },
+        {
+          "name": "Rename Project",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Name updated\", () => {",
+                  "  pm.expect(pm.response.json().name).to.eql('FlatHex Demo — Renamed');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"FlatHex Demo — Renamed\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/projects/{{project_id}}/rename",
+              "host": ["{{base_url}}"],
+              "path": ["projects", "{{project_id}}", "rename"]
+            }
+          }
+        },
+        {
+          "name": "Delete Project",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 204 No Content\", () => pm.response.to.have.status(204));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/projects/{{project_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["projects", "{{project_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cross-Domain (Rule 5 in action)",
+      "description": "These requests demonstrate Rule 5: Inter-Aggregate Isolation.\n\nThe `GET /projects/{id}/tasks` endpoint returns a composed response built by\nthe handler calling both `projectService` and `taskService` independently.\nNeither service imports the other — the orchestration lives entirely in the handler.\n\n**How to use:**\n1. Run 'Create Project' in the CRUD folder.\n2. Run 'Create Task' in the Tasks collection with `project_id` set.\n3. Run 'Get Project with Tasks' here.",
+      "item": [
+        {
+          "name": "Get Project with Tasks",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Has project fields\", () => {",
+                  "  pm.expect(body).to.have.all.keys('id', 'name', 'task_count', 'tasks');",
+                  "});",
+                  "pm.test(\"Tasks is an array\", () => pm.expect(body.tasks).to.be.an('array'));",
+                  "",
+                  "const taskCount = body.tasks.length;",
+                  "pm.test(`task_count matches tasks array length (${taskCount})`, () => {",
+                  "  pm.expect(body.task_count).to.eql(taskCount);",
+                  "});",
+                  "",
+                  "if (body.tasks.length > 0) {",
+                  "  pm.test(\"Each task has overdue flag\", () => {",
+                  "    body.tasks.forEach(t => pm.expect(t).to.have.property('overdue'));",
+                  "  });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/projects/{{project_id}}/tasks",
+              "host": ["{{base_url}}"],
+              "path": ["projects", "{{project_id}}", "tasks"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

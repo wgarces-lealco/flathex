@@ -1,0 +1,36 @@
+{
+  "id": "flathex-env-local",
+  "name": "TaskHex — Local",
+  "values": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080",
+      "type": "default",
+      "enabled": true,
+      "description": "Base URL of the API server. Change to staging/prod URL for other environments."
+    },
+    {
+      "key": "task_id",
+      "value": "",
+      "type": "default",
+      "enabled": true,
+      "description": "Auto-populated by 'Create Task'. Used by all task-specific requests."
+    },
+    {
+      "key": "project_id",
+      "value": "",
+      "type": "default",
+      "enabled": true,
+      "description": "Auto-populated by 'Create Project'. Used by project-specific and cross-domain requests."
+    },
+    {
+      "key": "notify_email",
+      "value": "dev@taskhex.local",
+      "type": "default",
+      "enabled": true,
+      "description": "Email used as ?notify= param when completing a task. Triggers the NoOpSender in local."
+    }
+  ],
+  "_postman_variable_scope": "environment",
+  "_postman_exported_at": "2026-03-10T00:00:00.000Z"
+}

@@ -1,0 +1,347 @@
+{
+  "info": {
+    "_postman_id": "flathex-tasks-collection",
+    "name": "TaskHex — Tasks",
+    "description": "All operations for the `tasks` aggregate.\n\n**Domain rules exercised here:**\n- Status machine: Pending → InProgress → Done → Pending\n- Validation: empty title, title > 200 chars\n- Overdue detection via `due_date`\n- Cross-aggregate notification on Complete (orchestrated in the handler)\n\n**Setup:** Import `environment.local.json` and start the server with `go run .`\n\nIDs are auto-captured from Create responses into `{{task_id}}`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [],
+  "item": [
+    {
+      "name": "CRUD",
+      "description": "Basic create / read / list / delete operations.",
+      "item": [
+        {
+          "name": "Create Task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 201 Created\", () => pm.response.to.have.status(201));",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Has id\", () => pm.expect(body.id).to.be.a('string').and.not.empty);",
+                  "pm.test(\"Status is pending\", () => pm.expect(body.status).to.eql('pending'));",
+                  "pm.test(\"Priority defaults to medium\", () => pm.expect(body.priority).to.eql('medium'));",
+                  "",
+                  "pm.environment.set('task_id', body.id);",
+                  "console.log('✅ task_id captured:', body.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Implement FlatHex demo\",\n  \"description\": \"Build the TaskHex example project to showcase the architecture.\",\n  \"project_id\": \"{{project_id}}\",\n  \"priority\": \"high\",\n  \"due_date\": \"2026-12-31\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/tasks",
+              "host": ["{{base_url}}"],
+              "path": ["tasks"]
+            }
+          }
+        },
+        {
+          "name": "Create Task — Minimal (no project)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 201 Created\", () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"project_id is empty\", () => pm.expect(body.project_id).to.eql(''));",
+                  "pm.environment.set('task_id', body.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Standalone task\",\n  \"priority\": \"low\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/tasks",
+              "host": ["{{base_url}}"],
+              "path": ["tasks"]
+            }
+          }
+        },
+        {
+          "name": "Create Task — ❌ Empty title (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 422 Unprocessable\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"Error message mentions title\", () => {",
+                  "  pm.expect(pm.response.text()).to.include('title');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"\",\n  \"priority\": \"low\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/tasks",
+              "host": ["{{base_url}}"],
+              "path": ["tasks"]
+            }
+          }
+        },
+        {
+          "name": "List All Tasks",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Response is an array\", () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/tasks",
+              "host": ["{{base_url}}"],
+              "path": ["tasks"]
+            }
+          }
+        },
+        {
+          "name": "Get Task by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"ID matches\", () => pm.expect(body.id).to.eql(pm.environment.get('task_id')));",
+                  "pm.test(\"Has overdue flag\", () => pm.expect(body).to.have.property('overdue'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/tasks/{{task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["tasks", "{{task_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Get Task — ❌ Not found (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 404 Not Found\", () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/tasks/does-not-exist",
+              "host": ["{{base_url}}"],
+              "path": ["tasks", "does-not-exist"]
+            }
+          }
+        },
+        {
+          "name": "Delete Task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 204 No Content\", () => pm.response.to.have.status(204));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/tasks/{{task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["tasks", "{{task_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Lifecycle (State Machine)",
+      "description": "Exercises the status machine: Pending → InProgress → Done → Pending.\n\nRun in order to see all valid transitions. The ❌ requests verify that invalid transitions return 422.",
+      "item": [
+        {
+          "name": "Start Task (Pending → InProgress)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Status is in_progress\", () => {",
+                  "  pm.expect(pm.response.json().status).to.eql('in_progress');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{base_url}}/tasks/{{task_id}}/start",
+              "host": ["{{base_url}}"],
+              "path": ["tasks", "{{task_id}}", "start"]
+            }
+          }
+        },
+        {
+          "name": "Complete Task (InProgress → Done) + notify",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Status is done\", () => {",
+                  "  pm.expect(pm.response.json().status).to.eql('done');",
+                  "});",
+                  "pm.test(\"Overdue is false when done\", () => {",
+                  "  pm.expect(pm.response.json().overdue).to.be.false;",
+                  "});",
+                  "console.log('📬 Check server logs for NoOpSender notification');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{base_url}}/tasks/{{task_id}}/complete?notify={{notify_email}}",
+              "host": ["{{base_url}}"],
+              "path": ["tasks", "{{task_id}}", "complete"],
+              "query": [{ "key": "notify", "value": "{{notify_email}}" }]
+            }
+          }
+        },
+        {
+          "name": "Reopen Task (Done → Pending)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Status is pending\", () => {",
+                  "  pm.expect(pm.response.json().status).to.eql('pending');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{base_url}}/tasks/{{task_id}}/reopen",
+              "host": ["{{base_url}}"],
+              "path": ["tasks", "{{task_id}}", "reopen"]
+            }
+          }
+        },
+        {
+          "name": "❌ Start a Done task (422 — invalid transition)",
+          "event": [
+            {
+              "listen": "pre-request",
+              "script": {
+                "exec": [
+                  "// Ensure the task is done before running this.",
+                  "// Run 'Complete Task' first."
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 422 — invalid transition\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"Error mentions transition\", () => {",
+                  "  pm.expect(pm.response.text()).to.include('transition');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{base_url}}/tasks/{{task_id}}/start",
+              "host": ["{{base_url}}"],
+              "path": ["tasks", "{{task_id}}", "start"]
+            }
+          }
+        },
+        {
+          "name": "❌ Complete an already-done task (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 422 — already completed\", () => pm.response.to.have.status(422));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{base_url}}/tasks/{{task_id}}/complete",
+              "host": ["{{base_url}}"],
+              "path": ["tasks", "{{task_id}}", "complete"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
