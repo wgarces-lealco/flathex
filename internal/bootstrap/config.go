@@ -1,4 +1,4 @@
-package config
+package bootstrap
 
 import "os"
 
@@ -10,7 +10,7 @@ type Config struct {
 	SMTPFrom    string
 }
 
-func Load() Config {
+func LoadConfig() Config {
 	return Config{
 		Port:        getEnv("PORT", "8080"),
 		Environment: getEnv("ENV", "development"),
