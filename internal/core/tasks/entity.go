@@ -51,6 +51,20 @@ func NewTask(id, title, description, projectID string, priority Priority, dueDat
 	}, nil
 }
 
+// RestoreTask reconstructs a Task loaded from persistence. Outbound adapters only.
+func RestoreTask(id, projectID, title, description string, status Status, priority Priority, dueDate *time.Time, createdAt, updatedAt time.Time) *Task {
+	var dd *time.Time
+	if dueDate != nil {
+		d := *dueDate
+		dd = &d
+	}
+	return &Task{
+		id: id, projectID: projectID, title: title, description: description,
+		status: status, priority: priority, dueDate: dd,
+		createdAt: createdAt, updatedAt: updatedAt,
+	}
+}
+
 func (t *Task) Start(now time.Time) error {
 	if t.status != StatusPending {
 		return ErrInvalidTransition

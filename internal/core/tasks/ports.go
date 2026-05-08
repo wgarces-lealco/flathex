@@ -6,7 +6,7 @@ import (
 )
 
 // Repository is the outbound port for task persistence.
-// Defined here; implemented in adapters/memory or adapters/postgres.
+// Implemented by adapters (e.g. sqlite, memory for tests).
 type Repository interface {
 	Save(ctx context.Context, t *Task) error
 	FindByID(ctx context.Context, id string) (*Task, error)

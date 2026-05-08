@@ -30,6 +30,15 @@ func NewProject(id, name, description string, now time.Time) (*Project, error) {
 	}, nil
 }
 
+// RestoreProject reconstructs a Project loaded from persistence. Outbound adapters only.
+func RestoreProject(id, name, description string, taskIDs []string, createdAt, updatedAt time.Time) *Project {
+	ids := append([]string(nil), taskIDs...)
+	return &Project{
+		id: id, name: name, description: description, taskIDs: ids,
+		createdAt: createdAt, updatedAt: updatedAt,
+	}
+}
+
 func (p *Project) AddTask(taskID string, now time.Time) {
 	if p.HasTask(taskID) {
 		return

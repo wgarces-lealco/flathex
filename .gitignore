@@ -2,6 +2,9 @@
 flathex
 *.exe
 
+# Local SQLite database
+*.db
+
 # Go toolchain
 /vendor/
 

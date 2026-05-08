@@ -1,7 +1,9 @@
 package bootstrap
 
 import (
+	"database/sql"
 	"flathex/internal/adapters/memory"
+	"flathex/internal/adapters/sqlite"
 	"flathex/internal/core/notifications"
 	"flathex/internal/core/projects"
 	"flathex/internal/core/tasks"
@@ -13,13 +15,13 @@ import (
 // Composition Root for the HTTP server: the only package that wires adapters,
 // core services, and presentation together. Split into *_wiring.go files if this grows large.
 
-// BuildEcho constructs Echo with all routes and middleware wired from cfg (for env-derived defaults later).
-func BuildEcho(cfg Config) *echo.Echo {
+// BuildEcho constructs Echo with all routes and middleware wired from cfg and db.
+func BuildEcho(cfg Config, db *sql.DB) *echo.Echo {
 	_ = cfg // wiring may read timeouts or feature flags from cfg later
 
 	clock := memory.RealClock{}
-	taskRepo := memory.NewTaskRepository()
-	projectRepo := memory.NewProjectRepository()
+	taskRepo := sqlite.NewTaskRepository(db)
+	projectRepo := sqlite.NewProjectRepository(db)
 	sender := memory.NoOpSender{}
 
 	taskSvc := tasks.NewService(taskRepo, clock)
