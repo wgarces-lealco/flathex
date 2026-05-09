@@ -17,7 +17,6 @@ import (
 
 // BuildEcho constructs Echo with all routes and middleware wired from cfg and db.
 func BuildEcho(cfg Config, db *sql.DB) *echo.Echo {
-	_ = cfg // wiring may read timeouts or feature flags from cfg later
 
 	clock := memory.RealClock{}
 	taskRepo := sqlite.NewTaskRepository(db)
@@ -31,7 +30,9 @@ func BuildEcho(cfg Config, db *sql.DB) *echo.Echo {
 	taskHandler := presentation.NewTaskHandler(taskSvc, projectSvc, notifSvc)
 	projectHandler := presentation.NewProjectHandler(projectSvc, taskSvc)
 
-	return presentation.NewRouter(taskHandler, projectHandler)
+	return presentation.NewRouter(taskHandler, projectHandler, presentation.RouterConfig{
+		RequestTimeout: cfg.RequestTimeout,
+	})
 }
 
 // PrintRoutes delegates to presentation for route listing (keeps main free of presentation import).
