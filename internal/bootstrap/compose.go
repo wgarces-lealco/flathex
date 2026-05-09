@@ -1,8 +1,8 @@
 package bootstrap
 
 import (
-	"flathex/internal/adapters/memory"
-	"flathex/internal/adapters/sqlite"
+	"flathex/internal/adapters/storage/memory"
+	"flathex/internal/adapters/storage/sqlite"
 	"flathex/internal/core/notifications"
 	"flathex/internal/core/projects"
 	"flathex/internal/core/tasks"

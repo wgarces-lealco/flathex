@@ -8,8 +8,8 @@ import (
 )
 
 // ── Fakes (in-memory) ─────────────────────────────────────────────────────────
-// These live in the test file, not in adapters/memory, to keep test ownership
-// local. For integration tests, use adapters/memory directly.
+// These live in the test file, not in adapters/storage/memory, to keep test ownership
+// local. For integration tests, use adapters/storage/memory directly.
 
 type fakeRepo struct {
 	store map[string]*tasks.Task

@@ -1,7 +1,7 @@
 package bootstrap
 
 import (
-	"flathex/internal/adapters/sqlite"
+	"flathex/internal/adapters/storage/sqlite"
 
 	"gorm.io/gorm"
 )
