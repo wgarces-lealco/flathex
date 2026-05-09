@@ -34,8 +34,11 @@ func run() error {
 		return fmt.Errorf("open database %q: %w", cfg.SQLitePath, err)
 	}
 	defer func() {
-		if cerr := db.Close(); cerr != nil {
-			slog.Error("database close", "error", cerr)
+		sqlDB, _ := db.DB()
+		if sqlDB != nil {
+			if cerr := sqlDB.Close(); cerr != nil {
+				slog.Error("database close", "error", cerr)
+			}
 		}
 	}()
 

@@ -2,137 +2,134 @@ package sqlite
 
 import (
 	"context"
-	"database/sql"
-	"flathex/internal/core/projects"
+	"errors"
 	"time"
+
+	"flathex/internal/core/projects"
+
+	"gorm.io/gorm"
 )
 
-type ProjectRepository struct {
-	db *sql.DB
+// projectModel is the GORM persistence model for the projects aggregate.
+type projectModel struct {
+	ID          string `gorm:"primaryKey"`
+	Name        string `gorm:"not null"`
+	Description string `gorm:"not null;default:''"`
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
-func NewProjectRepository(db *sql.DB) *ProjectRepository {
+func (projectModel) TableName() string { return "projects" }
+
+// projectTaskModel models the many-to-many join table between projects and tasks.
+type projectTaskModel struct {
+	ProjectID string `gorm:"primaryKey;not null"`
+	TaskID    string `gorm:"primaryKey;not null"`
+}
+
+func (projectTaskModel) TableName() string { return "project_tasks" }
+
+// ProjectRepository implements projects.Repository using GORM.
+type ProjectRepository struct {
+	db *gorm.DB
+}
+
+func NewProjectRepository(db *gorm.DB) *ProjectRepository {
 	return &ProjectRepository{db: db}
 }
 
 func (r *ProjectRepository) Save(ctx context.Context, p *projects.Project) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO projects (id, name, description, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT(id) DO UPDATE SET
-			name = excluded.name,
-			description = excluded.description,
-			created_at = excluded.created_at,
-			updated_at = excluded.updated_at`,
-		p.ID(), p.Name(), p.Description(),
-		p.CreatedAt().Format(time.RFC3339Nano),
-		p.UpdatedAt().Format(time.RFC3339Nano),
-	)
-	if err != nil {
-		return err
-	}
-
-	if _, err := tx.ExecContext(ctx, `DELETE FROM project_tasks WHERE project_id = ?`, p.ID()); err != nil {
-		return err
-	}
-	for _, tid := range p.TaskIDs() {
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO project_tasks (project_id, task_id) VALUES (?, ?)`,
-			p.ID(), tid); err != nil {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		m := projectModel{
+			ID:          p.ID(),
+			Name:        p.Name(),
+			Description: p.Description(),
+			CreatedAt:   p.CreatedAt(),
+			UpdatedAt:   p.UpdatedAt(),
+		}
+		if err := tx.Save(&m).Error; err != nil {
 			return err
 		}
-	}
-	return tx.Commit()
+
+		if err := tx.Delete(&projectTaskModel{}, "project_id = ?", p.ID()).Error; err != nil {
+			return err
+		}
+		for _, tid := range p.TaskIDs() {
+			if err := tx.Create(&projectTaskModel{ProjectID: p.ID(), TaskID: tid}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (r *ProjectRepository) FindByID(ctx context.Context, id string) (*projects.Project, error) {
-	var pid, name, description, createdAtStr, updatedAtStr string
-	err := r.db.QueryRowContext(ctx,
-		`SELECT id, name, description, created_at, updated_at FROM projects WHERE id = ?`, id,
-	).Scan(&pid, &name, &description, &createdAtStr, &updatedAtStr)
-	if err == sql.ErrNoRows {
-		return nil, projects.ErrNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	createdAt, err := time.Parse(time.RFC3339Nano, createdAtStr)
-	if err != nil {
-		return nil, err
-	}
-	updatedAt, err := time.Parse(time.RFC3339Nano, updatedAtStr)
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := r.db.QueryContext(ctx,
-		`SELECT task_id FROM project_tasks WHERE project_id = ? ORDER BY task_id`, pid)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var taskIDs []string
-	for rows.Next() {
-		var tid string
-		if err := rows.Scan(&tid); err != nil {
-			return nil, err
+	var m projectModel
+	if err := r.db.WithContext(ctx).First(&m, "id = ?", id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, projects.ErrNotFound
 		}
-		taskIDs = append(taskIDs, tid)
-	}
-	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 
-	return projects.RestoreProject(pid, name, description, taskIDs, createdAt, updatedAt), nil
+	var joins []projectTaskModel
+	if err := r.db.WithContext(ctx).
+		Where("project_id = ?", id).
+		Order("task_id").
+		Find(&joins).Error; err != nil {
+		return nil, err
+	}
+
+	taskIDs := make([]string, 0, len(joins))
+	for _, j := range joins {
+		taskIDs = append(taskIDs, j.TaskID)
+	}
+
+	return toProject(m, taskIDs), nil
 }
 
 func (r *ProjectRepository) FindAll(ctx context.Context) ([]*projects.Project, error) {
-	rows, err := r.db.QueryContext(ctx,
-		`SELECT id FROM projects ORDER BY created_at`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-	if err := rows.Err(); err != nil {
+	var rows []projectModel
+	if err := r.db.WithContext(ctx).Order("created_at").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 
-	out := make([]*projects.Project, 0, len(ids))
-	for _, id := range ids {
-		p, err := r.FindByID(ctx, id)
-		if err != nil {
+	out := make([]*projects.Project, 0, len(rows))
+	for _, m := range rows {
+		var joins []projectTaskModel
+		if err := r.db.WithContext(ctx).
+			Where("project_id = ?", m.ID).
+			Order("task_id").
+			Find(&joins).Error; err != nil {
 			return nil, err
 		}
-		out = append(out, p)
+		taskIDs := make([]string, 0, len(joins))
+		for _, j := range joins {
+			taskIDs = append(taskIDs, j.TaskID)
+		}
+		out = append(out, toProject(m, taskIDs))
 	}
 	return out, nil
 }
 
 func (r *ProjectRepository) Delete(ctx context.Context, id string) error {
-	res, err := r.db.ExecContext(ctx, `DELETE FROM projects WHERE id = ?`, id)
-	if err != nil {
-		return err
+	res := r.db.WithContext(ctx).Delete(&projectModel{}, "id = ?", id)
+	if res.Error != nil {
+		return res.Error
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if n == 0 {
+	if res.RowsAffected == 0 {
 		return projects.ErrNotFound
 	}
 	return nil
 }
+
+// --- mapping helpers (Anti-Corruption Layer) ---
+
+func toProject(m projectModel, taskIDs []string) *projects.Project {
+	return projects.RestoreProject(
+		m.ID, m.Name, m.Description,
+		taskIDs,
+		m.CreatedAt, m.UpdatedAt,
+	)
+}
+

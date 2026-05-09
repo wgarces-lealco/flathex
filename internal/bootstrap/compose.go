@@ -1,7 +1,6 @@
 package bootstrap
 
 import (
-	"database/sql"
 	"flathex/internal/adapters/memory"
 	"flathex/internal/adapters/sqlite"
 	"flathex/internal/core/notifications"
@@ -10,13 +9,14 @@ import (
 	"flathex/internal/presentation"
 
 	"github.com/labstack/echo/v4"
+	"gorm.io/gorm"
 )
 
 // Composition Root for the HTTP server: the only package that wires adapters,
 // core services, and presentation together. Split into *_wiring.go files if this grows large.
 
 // BuildEcho constructs Echo with all routes and middleware wired from cfg and db.
-func BuildEcho(cfg Config, db *sql.DB) *echo.Echo {
+func BuildEcho(cfg Config, db *gorm.DB) *echo.Echo {
 
 	clock := memory.RealClock{}
 	taskRepo := sqlite.NewTaskRepository(db)
