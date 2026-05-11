@@ -125,27 +125,91 @@ When generating tests, the AI must follow:
 - **Style:** Always use Table-Driven Tests (`[]struct{ name string ... }`).
 - **Mocking Databases:** Use Fakes (in-memory maps) for repositories to test state. Do not use `mockery` for databases.
 - **Mocking External APIs:** Use `mockery` for external I/O ports (e.g., Stripe, Email senders) to test interactions.
+- **Mocking Time:** Use a `fixedClock` fake that implements the `Clock` port. Never use `time.Now()` in tests.
+
+```go
+type fixedClock struct{ t time.Time }
+func (c fixedClock) Now() time.Time { return c.t }
+```
 
 ---
 
 ## 5. END-TO-END REFERENCE AGGREGATE (THE BLUEPRINT)
 
 > **AI Agent:** Use this as your exact template when asked to create a new aggregate.
+> Key invariants to always honour:
+> - All fields are **private**. State is only readable through explicit getters.
+> - `NewXxx` validates invariants and sets a safe initial state. It is the only valid constructor for new entities.
+> - `RestoreXxx` reconstructs from persistence **without** re-validating. It is for outbound adapters only.
+> - Behavioural methods (state transitions, mutations) enforce domain rules and update `updatedAt` themselves.
+> - Getters that return slices or pointers **must** return copies, never the internal reference.
+> - The `Clock` port is injected into the service; it must never call `time.Now()` directly.
 
 **`internal/core/payments/entity.go`**
 
 ```go
 package payments
 
+import "time"
+
+type Status string
+
+const (
+    StatusPending   Status = "pending"
+    StatusCaptured  Status = "captured"
+    StatusRefunded  Status = "refunded"
+)
+
+// Payment is the aggregate root. No framework tags, no external imports.
 type Payment struct {
-    id     string
-    amount float64
+    id        string
+    amount    float64
+    status    Status
+    createdAt time.Time
+    updatedAt time.Time
 }
 
-func NewPayment(id string, amount float64) *Payment {
-    return &Payment{id: id, amount: amount}
+func NewPayment(id string, amount float64, now time.Time) (*Payment, error) {
+    if amount <= 0 {
+        return nil, ErrInvalidAmount
+    }
+    return &Payment{
+        id:        id,
+        amount:    amount,
+        status:    StatusPending,
+        createdAt: now,
+        updatedAt: now,
+    }, nil
 }
-func (p *Payment) ID() string { return p.id }
+
+// RestorePayment reconstructs a Payment loaded from persistence. Outbound adapters only.
+func RestorePayment(id string, amount float64, status Status, createdAt, updatedAt time.Time) *Payment {
+    return &Payment{id: id, amount: amount, status: status, createdAt: createdAt, updatedAt: updatedAt}
+}
+
+func (p *Payment) Capture(now time.Time) error {
+    if p.status != StatusPending {
+        return ErrInvalidTransition
+    }
+    p.status = StatusCaptured
+    p.updatedAt = now
+    return nil
+}
+
+func (p *Payment) Refund(now time.Time) error {
+    if p.status != StatusCaptured {
+        return ErrInvalidTransition
+    }
+    p.status = StatusRefunded
+    p.updatedAt = now
+    return nil
+}
+
+func (p *Payment) ID() string          { return p.id }
+func (p *Payment) Amount() float64     { return p.amount }
+func (p *Payment) Status() Status      { return p.status }
+func (p *Payment) CreatedAt() time.Time { return p.createdAt }
+func (p *Payment) UpdatedAt() time.Time { return p.updatedAt }
 ```
 
 **`internal/core/payments/errors.go`**
@@ -155,7 +219,11 @@ package payments
 
 import "errors"
 
-var ErrInvalidAmount = errors.New("payment amount must be positive")
+var (
+    ErrNotFound          = errors.New("payment not found")
+    ErrInvalidAmount     = errors.New("payment amount must be positive")
+    ErrInvalidTransition = errors.New("invalid status transition")
+)
 ```
 
 **`internal/core/payments/ports.go`**
@@ -163,10 +231,20 @@ var ErrInvalidAmount = errors.New("payment amount must be positive")
 ```go
 package payments
 
-import "context"
+import (
+    "context"
+    "time"
+)
 
+// Repository is the outbound port for payment persistence.
 type Repository interface {
     Save(ctx context.Context, p *Payment) error
+    FindByID(ctx context.Context, id string) (*Payment, error)
+}
+
+// Clock is an outbound port for time, keeping the service fully testable.
+type Clock interface {
+    Now() time.Time
 }
 ```
 
@@ -178,18 +256,37 @@ package payments
 import "context"
 
 type Service struct {
-    repo Repository
+    repo  Repository
+    clock Clock
 }
 
-func NewService(repo Repository) *Service {
-    return &Service{repo: repo}
+func NewService(repo Repository, clock Clock) *Service {
+    return &Service{repo: repo, clock: clock}
 }
 
-func (s *Service) Process(ctx context.Context, id string, amount float64) error {
-    if amount <= 0 {
-        return ErrInvalidAmount
+// Every mutating method follows: Load → Mutate (on the aggregate) → Save.
+func (s *Service) Create(ctx context.Context, id string, amount float64) (*Payment, error) {
+    p, err := NewPayment(id, amount, s.clock.Now())
+    if err != nil {
+        return nil, err
     }
-    payment := NewPayment(id, amount)
-    return s.repo.Save(ctx, payment)
+    if err := s.repo.Save(ctx, p); err != nil {
+        return nil, err
+    }
+    return p, nil
+}
+
+func (s *Service) Capture(ctx context.Context, id string) (*Payment, error) {
+    p, err := s.repo.FindByID(ctx, id)
+    if err != nil {
+        return nil, err
+    }
+    if err := p.Capture(s.clock.Now()); err != nil {
+        return nil, err
+    }
+    if err := s.repo.Save(ctx, p); err != nil {
+        return nil, err
+    }
+    return p, nil
 }
 ```
