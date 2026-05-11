@@ -59,6 +59,7 @@ func NewRouter(tasks *TaskHandler, projects *ProjectHandler, cfg RouterConfig) *
 	e.PATCH("/tasks/:id/start", tasks.Start)
 	e.PATCH("/tasks/:id/complete", tasks.Complete)
 	e.PATCH("/tasks/:id/reopen", tasks.Reopen)
+	e.PATCH("/tasks/:id/cancel", tasks.Cancel)
 
 	// Projects
 	e.POST("/projects", projects.Create)

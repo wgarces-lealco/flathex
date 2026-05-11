@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "flathex-tasks-collection",
     "name": "TaskHex — Tasks",
-    "description": "All operations for the `tasks` aggregate.\n\n**Domain rules exercised here:**\n- Status machine: Pending → InProgress → Done → Pending\n- Validation: empty title, title > 200 chars\n- Overdue detection via `due_date`\n- Cross-aggregate notification on Complete (orchestrated in the handler)\n\n**Setup:** Import `environment.local.json` and start the server with `go run .`\n\nIDs are auto-captured from Create responses into `{{task_id}}`.",
+    "description": "All operations for the `tasks` aggregate.\n\n**Domain rules exercised here:**\n- Status machine: Pending → InProgress → Done (strict — no skipping)\n- Cancellation: Pending or InProgress → Cancelled → Pending (via Reopen)\n- Validation: empty title, title > 200 chars\n- Overdue detection via `due_date` (false for done and cancelled tasks)\n- Cross-aggregate notification on Complete (orchestrated in the handler)\n\n**Setup:** Import `environment.local.json` and start the server with `go run .`\n\nIDs are auto-captured from Create responses into `{{task_id}}`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [],
@@ -202,7 +202,7 @@
     },
     {
       "name": "Lifecycle (State Machine)",
-      "description": "Exercises the status machine: Pending → InProgress → Done → Pending.\n\nRun in order to see all valid transitions. The ❌ requests verify that invalid transitions return 422.",
+      "description": "Exercises the status machine: Pending → InProgress → Done → Pending (via Reopen) and the Cancellation branch: Pending/InProgress → Cancelled → Pending (via Reopen).\n\nRun in order to see all valid transitions. The ❌ requests verify that invalid transitions return 422.",
       "item": [
         {
           "name": "Start Task (Pending → InProgress)",
@@ -320,13 +320,25 @@
           }
         },
         {
-          "name": "❌ Complete an already-done task (422)",
+          "name": "❌ Complete without starting first (422 — invalid transition)",
           "event": [
+            {
+              "listen": "pre-request",
+              "script": {
+                "exec": [
+                  "// Requires a task in 'pending' state. Create a fresh task first."
+                ],
+                "type": "text/javascript"
+              }
+            },
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Status 422 — already completed\", () => pm.response.to.have.status(422));"
+                  "pm.test(\"Status 422 — invalid transition\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"Error mentions transition\", () => {",
+                  "  pm.expect(pm.response.text()).to.include('transition');",
+                  "});"
                 ],
                 "type": "text/javascript"
               }
@@ -338,6 +350,127 @@
               "raw": "{{base_url}}/tasks/{{task_id}}/complete",
               "host": ["{{base_url}}"],
               "path": ["tasks", "{{task_id}}", "complete"]
+            }
+          }
+        },
+        {
+          "name": "Cancel Task (Pending → Cancelled)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Status is cancelled\", () => {",
+                  "  pm.expect(pm.response.json().status).to.eql('cancelled');",
+                  "});",
+                  "pm.test(\"Overdue is false when cancelled\", () => {",
+                  "  pm.expect(pm.response.json().overdue).to.be.false;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{base_url}}/tasks/{{task_id}}/cancel",
+              "host": ["{{base_url}}"],
+              "path": ["tasks", "{{task_id}}", "cancel"]
+            }
+          }
+        },
+        {
+          "name": "Reopen Task (Cancelled → Pending)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Status is pending\", () => {",
+                  "  pm.expect(pm.response.json().status).to.eql('pending');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{base_url}}/tasks/{{task_id}}/reopen",
+              "host": ["{{base_url}}"],
+              "path": ["tasks", "{{task_id}}", "reopen"]
+            }
+          }
+        },
+        {
+          "name": "❌ Cancel a Done task (422 — invalid transition)",
+          "event": [
+            {
+              "listen": "pre-request",
+              "script": {
+                "exec": [
+                  "// Requires a task in 'done' state. Run Start + Complete first."
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 422 — invalid transition\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"Error mentions transition\", () => {",
+                  "  pm.expect(pm.response.text()).to.include('transition');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{base_url}}/tasks/{{task_id}}/cancel",
+              "host": ["{{base_url}}"],
+              "path": ["tasks", "{{task_id}}", "cancel"]
+            }
+          }
+        },
+        {
+          "name": "❌ Cancel twice (422 — already cancelled)",
+          "event": [
+            {
+              "listen": "pre-request",
+              "script": {
+                "exec": [
+                  "// Requires a task already in 'cancelled' state. Run 'Cancel Task' first."
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 422 — already cancelled\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"Error mentions cancelled\", () => {",
+                  "  pm.expect(pm.response.text()).to.include('cancelled');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{base_url}}/tasks/{{task_id}}/cancel",
+              "host": ["{{base_url}}"],
+              "path": ["tasks", "{{task_id}}", "cancel"]
             }
           }
         }

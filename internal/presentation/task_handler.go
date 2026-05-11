@@ -21,6 +21,7 @@ type taskService interface {
 	Start(ctx context.Context, id string) (*tasks.Task, error)
 	Complete(ctx context.Context, id string) (*tasks.Task, error)
 	Reopen(ctx context.Context, id string) (*tasks.Task, error)
+	Cancel(ctx context.Context, id string) (*tasks.Task, error)
 	UpdateTitle(ctx context.Context, id, title string) (*tasks.Task, error)
 	Delete(ctx context.Context, id string) error
 	GetByID(ctx context.Context, id string) (*tasks.Task, error)
@@ -156,6 +157,14 @@ func (h *TaskHandler) Complete(c echo.Context) error {
 
 func (h *TaskHandler) Reopen(c echo.Context) error {
 	task, err := h.tasks.Reopen(c.Request().Context(), c.Param("id"))
+	if err != nil {
+		return h.taskError(err)
+	}
+	return c.JSON(http.StatusOK, toTaskResponse(task))
+}
+
+func (h *TaskHandler) Cancel(c echo.Context) error {
+	task, err := h.tasks.Cancel(c.Request().Context(), c.Param("id"))
 	if err != nil {
 		return h.taskError(err)
 	}
