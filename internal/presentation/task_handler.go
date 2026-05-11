@@ -35,7 +35,7 @@ type projectLinker interface {
 }
 
 type notifier interface {
-	NotifyTaskCompleted(ctx context.Context, id, recipient, taskTitle string) error
+	NotifyTaskCompleted(ctx context.Context, recipient, taskTitle string) error
 }
 
 // ── DTOs ─────────────────────────────────────────────────────────────────────
@@ -147,7 +147,7 @@ func (h *TaskHandler) Complete(c echo.Context) error {
 
 	// Rule 5: cross-aggregate notification orchestrated here, not inside core.
 	if email := c.QueryParam("notify"); email != "" {
-		if err := h.notifs.NotifyTaskCompleted(c.Request().Context(), uuid.NewString(), email, task.Title()); err != nil {
+		if err := h.notifs.NotifyTaskCompleted(c.Request().Context(), email, task.Title()); err != nil {
 			slog.Warn("notification failed after task completion", "task_id", c.Param("id"), "error", err)
 		}
 	}
@@ -210,6 +210,7 @@ func (h *TaskHandler) taskError(err error) error {
 	case
 		errors.Is(err, tasks.ErrEmptyTitle),
 		errors.Is(err, tasks.ErrTitleTooLong),
+		errors.Is(err, tasks.ErrInvalidPriority),
 		errors.Is(err, tasks.ErrInvalidTransition),
 		errors.Is(err, tasks.ErrAlreadyCancelled):
 		slog.Warn("task business rule violation", "error", err)

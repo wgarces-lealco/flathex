@@ -39,6 +39,11 @@ func NewTask(id, title, description, projectID string, priority Priority, dueDat
 	if len(title) > 200 {
 		return nil, ErrTitleTooLong
 	}
+	switch priority {
+	case PriorityLow, PriorityMedium, PriorityHigh:
+	default:
+		return nil, ErrInvalidPriority
+	}
 	return &Task{
 		id:          id,
 		projectID:   projectID,

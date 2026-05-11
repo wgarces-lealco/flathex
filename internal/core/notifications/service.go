@@ -16,9 +16,8 @@ func NewService(sender Sender, clock Clock) *Service {
 
 // NotifyTaskCompleted fires when a task transitions to Done.
 // The handler passes primitive values — no Task struct crosses boundaries.
-func (s *Service) NotifyTaskCompleted(ctx context.Context, id, recipient, taskTitle string) error {
+func (s *Service) NotifyTaskCompleted(ctx context.Context, recipient, taskTitle string) error {
 	n, err := NewNotification(
-		id,
 		recipient,
 		TypeTaskCompleted,
 		"Task completed: "+taskTitle,
@@ -32,9 +31,8 @@ func (s *Service) NotifyTaskCompleted(ctx context.Context, id, recipient, taskTi
 }
 
 // NotifyTaskOverdue fires when a task's due date is past and it is not done.
-func (s *Service) NotifyTaskOverdue(ctx context.Context, id, recipient, taskTitle string) error {
+func (s *Service) NotifyTaskOverdue(ctx context.Context, recipient, taskTitle string) error {
 	n, err := NewNotification(
-		id,
 		recipient,
 		TypeTaskOverdue,
 		"Overdue task: "+taskTitle,
@@ -48,9 +46,8 @@ func (s *Service) NotifyTaskOverdue(ctx context.Context, id, recipient, taskTitl
 }
 
 // NotifyProjectDone fires when every task in a project is completed.
-func (s *Service) NotifyProjectDone(ctx context.Context, id, recipient, projectName string) error {
+func (s *Service) NotifyProjectDone(ctx context.Context, recipient, projectName string) error {
 	n, err := NewNotification(
-		id,
 		recipient,
 		TypeProjectDone,
 		"Project completed: "+projectName,

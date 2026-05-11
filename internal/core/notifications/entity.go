@@ -10,8 +10,10 @@ const (
 	TypeProjectDone   NotificationType = "project_done"
 )
 
+// Notification is a Value Object — it is defined entirely by its content,
+// has no identity of its own, and is immutable after construction.
+// It is never persisted: it is created and handed to a Sender in one operation.
 type Notification struct {
-	id        string
 	recipient string
 	notifType NotificationType
 	subject   string
@@ -19,12 +21,11 @@ type Notification struct {
 	sentAt    time.Time
 }
 
-func NewNotification(id, recipient string, notifType NotificationType, subject, body string, now time.Time) (*Notification, error) {
+func NewNotification(recipient string, notifType NotificationType, subject, body string, now time.Time) (*Notification, error) {
 	if recipient == "" {
 		return nil, ErrEmptyRecipient
 	}
 	return &Notification{
-		id:        id,
 		recipient: recipient,
 		notifType: notifType,
 		subject:   subject,
@@ -33,9 +34,8 @@ func NewNotification(id, recipient string, notifType NotificationType, subject, 
 	}, nil
 }
 
-func (n *Notification) ID() string               { return n.id }
-func (n *Notification) Recipient() string        { return n.recipient }
-func (n *Notification) Type() NotificationType   { return n.notifType }
-func (n *Notification) Subject() string          { return n.subject }
-func (n *Notification) Body() string             { return n.body }
-func (n *Notification) SentAt() time.Time        { return n.sentAt }
+func (n *Notification) Recipient() string       { return n.recipient }
+func (n *Notification) Type() NotificationType  { return n.notifType }
+func (n *Notification) Subject() string         { return n.subject }
+func (n *Notification) Body() string            { return n.body }
+func (n *Notification) SentAt() time.Time       { return n.sentAt }

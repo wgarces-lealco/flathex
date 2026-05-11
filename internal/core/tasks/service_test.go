@@ -75,20 +75,24 @@ func newSvc() *tasks.Service {
 
 func TestCreate(t *testing.T) {
 	tt := []struct {
-		name      string
-		title     string
-		wantErr   error
+		name        string
+		title       string
+		priority    tasks.Priority
+		wantErr     error
 		wantNilTask bool
 	}{
-		{name: "valid task", title: "Write tests", wantErr: nil, wantNilTask: false},
-		{name: "empty title", title: "", wantErr: tasks.ErrEmptyTitle, wantNilTask: true},
-		{name: "title too long", title: string(make([]byte, 201)), wantErr: tasks.ErrTitleTooLong, wantNilTask: true},
+		{name: "valid task — high priority", title: "Write tests", priority: tasks.PriorityHigh, wantErr: nil, wantNilTask: false},
+		{name: "valid task — medium priority", title: "Write tests", priority: tasks.PriorityMedium, wantErr: nil, wantNilTask: false},
+		{name: "valid task — low priority", title: "Write tests", priority: tasks.PriorityLow, wantErr: nil, wantNilTask: false},
+		{name: "empty title", title: "", priority: tasks.PriorityMedium, wantErr: tasks.ErrEmptyTitle, wantNilTask: true},
+		{name: "title too long", title: string(make([]byte, 201)), priority: tasks.PriorityMedium, wantErr: tasks.ErrTitleTooLong, wantNilTask: true},
+		{name: "invalid priority", title: "Write tests", priority: tasks.Priority("urgent"), wantErr: tasks.ErrInvalidPriority, wantNilTask: true},
 	}
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			svc := newSvc()
-			task, err := svc.Create(context.Background(), "id-1", tc.title, "", "", tasks.PriorityMedium, nil)
+			task, err := svc.Create(context.Background(), "id-1", tc.title, "", "", tc.priority, nil)
 			if tc.wantErr != nil {
 				if err == nil {
 					t.Fatalf("expected error %v, got nil", tc.wantErr)
