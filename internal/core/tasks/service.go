@@ -81,6 +81,20 @@ func (s *Service) UpdateTitle(ctx context.Context, id, title string) (*Task, err
 	return task, nil
 }
 
+func (s *Service) Cancel(ctx context.Context, id string) (*Task, error) {
+	task, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := task.Cancel(s.clock.Now()); err != nil {
+		return nil, err
+	}
+	if err := s.repo.Save(ctx, task); err != nil {
+		return nil, err
+	}
+	return task, nil
+}
+
 func (s *Service) Delete(ctx context.Context, id string) error {
 	if _, err := s.repo.FindByID(ctx, id); err != nil {
 		return err

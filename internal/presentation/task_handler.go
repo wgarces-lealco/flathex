@@ -194,13 +194,15 @@ func (h *TaskHandler) ListAll(c echo.Context) error {
 // The core is HTTP-agnostic; this layer owns the translation (Rule 3).
 func (h *TaskHandler) taskError(err error) error {
 	switch {
-	case errors.Is(err, tasks.ErrNotFound):
+	case
+		errors.Is(err, tasks.ErrNotFound):
 		slog.Warn("task not found", "error", err)
 		return echo.NewHTTPError(http.StatusNotFound, err.Error())
-	case errors.Is(err, tasks.ErrEmptyTitle),
+	case
+		errors.Is(err, tasks.ErrEmptyTitle),
 		errors.Is(err, tasks.ErrTitleTooLong),
 		errors.Is(err, tasks.ErrInvalidTransition),
-		errors.Is(err, tasks.ErrAlreadyCompleted):
+		errors.Is(err, tasks.ErrAlreadyCancelled):
 		slog.Warn("task business rule violation", "error", err)
 		return echo.NewHTTPError(http.StatusUnprocessableEntity, err.Error())
 	default:

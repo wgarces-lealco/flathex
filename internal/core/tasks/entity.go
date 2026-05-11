@@ -8,6 +8,7 @@ const (
 	StatusPending    Status = "pending"
 	StatusInProgress Status = "in_progress"
 	StatusDone       Status = "done"
+	StatusCancelled  Status = "cancelled"
 )
 
 type Priority string
@@ -75,8 +76,8 @@ func (t *Task) Start(now time.Time) error {
 }
 
 func (t *Task) Complete(now time.Time) error {
-	if t.status == StatusDone {
-		return ErrAlreadyCompleted
+	if t.status != StatusInProgress {
+		return ErrInvalidTransition
 	}
 	t.status = StatusDone
 	t.updatedAt = now
@@ -84,10 +85,22 @@ func (t *Task) Complete(now time.Time) error {
 }
 
 func (t *Task) Reopen(now time.Time) error {
-	if t.status != StatusDone {
+	if t.status != StatusDone && t.status != StatusCancelled {
 		return ErrInvalidTransition
 	}
 	t.status = StatusPending
+	t.updatedAt = now
+	return nil
+}
+
+func (t *Task) Cancel(now time.Time) error {
+	if t.status == StatusDone {
+		return ErrInvalidTransition
+	}
+	if t.status == StatusCancelled {
+		return ErrAlreadyCancelled
+	}
+	t.status = StatusCancelled
 	t.updatedAt = now
 	return nil
 }
@@ -110,7 +123,7 @@ func (t *Task) ChangePriority(p Priority, now time.Time) {
 }
 
 func (t *Task) IsOverdue(now time.Time) bool {
-	if t.dueDate == nil || t.status == StatusDone {
+	if t.dueDate == nil || t.status == StatusDone || t.status == StatusCancelled {
 		return false
 	}
 	return now.After(*t.dueDate)

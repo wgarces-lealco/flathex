@@ -124,15 +124,16 @@ func TestStatusTransitions(t *testing.T) {
 			wantFinal: tasks.StatusDone,
 		},
 		{
-			name: "pending → done directly",
+			name: "cannot complete without starting first",
 			actions: []func(*tasks.Service, string) error{
 				func(s *tasks.Service, id string) error { _, err := s.Complete(context.Background(), id); return err },
 			},
-			wantFinal: tasks.StatusDone,
+			wantErr: tasks.ErrInvalidTransition,
 		},
 		{
 			name: "done → pending (reopen)",
 			actions: []func(*tasks.Service, string) error{
+				func(s *tasks.Service, id string) error { _, err := s.Start(context.Background(), id); return err },
 				func(s *tasks.Service, id string) error { _, err := s.Complete(context.Background(), id); return err },
 				func(s *tasks.Service, id string) error { _, err := s.Reopen(context.Background(), id); return err },
 			},
@@ -141,6 +142,7 @@ func TestStatusTransitions(t *testing.T) {
 		{
 			name: "cannot start a done task",
 			actions: []func(*tasks.Service, string) error{
+				func(s *tasks.Service, id string) error { _, err := s.Start(context.Background(), id); return err },
 				func(s *tasks.Service, id string) error { _, err := s.Complete(context.Background(), id); return err },
 				func(s *tasks.Service, id string) error { _, err := s.Start(context.Background(), id); return err },
 			},
@@ -149,10 +151,51 @@ func TestStatusTransitions(t *testing.T) {
 		{
 			name: "cannot complete twice",
 			actions: []func(*tasks.Service, string) error{
+				func(s *tasks.Service, id string) error { _, err := s.Start(context.Background(), id); return err },
 				func(s *tasks.Service, id string) error { _, err := s.Complete(context.Background(), id); return err },
 				func(s *tasks.Service, id string) error { _, err := s.Complete(context.Background(), id); return err },
 			},
-			wantErr: tasks.ErrAlreadyCompleted,
+			wantErr: tasks.ErrInvalidTransition,
+		},
+		{
+			name: "pending → cancelled",
+			actions: []func(*tasks.Service, string) error{
+				func(s *tasks.Service, id string) error { _, err := s.Cancel(context.Background(), id); return err },
+			},
+			wantFinal: tasks.StatusCancelled,
+		},
+		{
+			name: "in_progress → cancelled",
+			actions: []func(*tasks.Service, string) error{
+				func(s *tasks.Service, id string) error { _, err := s.Start(context.Background(), id); return err },
+				func(s *tasks.Service, id string) error { _, err := s.Cancel(context.Background(), id); return err },
+			},
+			wantFinal: tasks.StatusCancelled,
+		},
+		{
+			name: "cancelled → pending (reopen)",
+			actions: []func(*tasks.Service, string) error{
+				func(s *tasks.Service, id string) error { _, err := s.Cancel(context.Background(), id); return err },
+				func(s *tasks.Service, id string) error { _, err := s.Reopen(context.Background(), id); return err },
+			},
+			wantFinal: tasks.StatusPending,
+		},
+		{
+			name: "cannot cancel a done task",
+			actions: []func(*tasks.Service, string) error{
+				func(s *tasks.Service, id string) error { _, err := s.Start(context.Background(), id); return err },
+				func(s *tasks.Service, id string) error { _, err := s.Complete(context.Background(), id); return err },
+				func(s *tasks.Service, id string) error { _, err := s.Cancel(context.Background(), id); return err },
+			},
+			wantErr: tasks.ErrInvalidTransition,
+		},
+		{
+			name: "cannot cancel twice",
+			actions: []func(*tasks.Service, string) error{
+				func(s *tasks.Service, id string) error { _, err := s.Cancel(context.Background(), id); return err },
+				func(s *tasks.Service, id string) error { _, err := s.Cancel(context.Background(), id); return err },
+			},
+			wantErr: tasks.ErrAlreadyCancelled,
 		},
 	}
 
@@ -231,9 +274,10 @@ func TestIsOverdue(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			svc := newSvc()
 			task, _ := svc.Create(context.Background(), "id-1", "Task", "", "", tasks.PriorityLow, tc.dueDate)
-			if tc.complete {
-				svc.Complete(context.Background(), task.ID())
-			}
+		if tc.complete {
+			svc.Start(context.Background(), task.ID())
+			svc.Complete(context.Background(), task.ID())
+		}
 			got, _ := svc.GetByID(context.Background(), task.ID())
 			if got.IsOverdue(fixedNow) != tc.wantOverdue {
 				t.Errorf("IsOverdue: expected %v, got %v", tc.wantOverdue, got.IsOverdue(fixedNow))
