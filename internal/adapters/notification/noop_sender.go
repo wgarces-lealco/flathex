@@ -1,13 +1,14 @@
-package memory
+package notification
 
 import (
 	"context"
-	"flathex/internal/core/notifications"
 	"log/slog"
+
+	"flathex/internal/core/notifications"
 )
 
 // NoOpSender implements notifications.Sender for local development.
-// It logs the notification instead of sending a real email.
+// It logs the notification instead of dispatching a real message.
 type NoOpSender struct{}
 
 func (NoOpSender) Send(_ context.Context, n *notifications.Notification) error {

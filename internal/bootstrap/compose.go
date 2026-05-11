@@ -1,7 +1,8 @@
 package bootstrap
 
 import (
-	"flathex/internal/adapters/storage/memory"
+	"flathex/internal/adapters/clock"
+	"flathex/internal/adapters/notification"
 	"flathex/internal/adapters/storage/sqlite"
 	"flathex/internal/core/notifications"
 	"flathex/internal/core/projects"
@@ -18,14 +19,14 @@ import (
 // BuildEcho constructs Echo with all routes and middleware wired from cfg and db.
 func BuildEcho(cfg Config, db *gorm.DB) *echo.Echo {
 
-	clock := memory.RealClock{}
+	clk := clock.Real{}
 	taskRepo := sqlite.NewTaskRepository(db)
 	projectRepo := sqlite.NewProjectRepository(db)
-	sender := memory.NoOpSender{}
+	sender := notification.NoOpSender{}
 
-	taskSvc := tasks.NewService(taskRepo, clock)
-	projectSvc := projects.NewService(projectRepo, clock)
-	notifSvc := notifications.NewService(sender, clock)
+	taskSvc := tasks.NewService(taskRepo, clk)
+	projectSvc := projects.NewService(projectRepo, clk)
+	notifSvc := notifications.NewService(sender, clk)
 
 	taskHandler := presentation.NewTaskHandler(taskSvc, projectSvc, notifSvc)
 	projectHandler := presentation.NewProjectHandler(projectSvc, taskSvc)
